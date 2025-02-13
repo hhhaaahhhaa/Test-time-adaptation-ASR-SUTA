@@ -63,6 +63,18 @@ def get_task(name) -> Dataset:
         # ds = librispeech_c.RandomSequence(noise_type, snr_level=snr_level, repeat=4)
         return ds
     
+    if name.startswith("PAIR_LS_"):  # e.g. PAIR_LS_AA_5
+        name = name[5:]
+
+        from . import paired
+        types = name.split("_")
+        noise_type = types[1]
+        snr_level = 10
+        if len(types) == 3:
+            snr_level = int(types[2])
+        ds = paired.LibriSpeechSequence(noise_type, snr_level=snr_level)
+        return ds
+    
     if name.startswith("L2_"):  # e.g. L2_Korean, L2_Korean_AA_5
         types = name.split("_")
         if len(types) == 2:

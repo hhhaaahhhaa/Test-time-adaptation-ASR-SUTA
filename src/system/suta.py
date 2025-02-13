@@ -7,7 +7,7 @@ from copy import deepcopy
 import json
 
 from ..utils.tool import batchify
-from .loss import softmax_entropy, mcc_loss, div_loss
+from .loss import softmax_entropy, mcc_loss, div_loss, kl_loss
 
 
 class SUTASystem(object):
@@ -31,7 +31,7 @@ class SUTASystem(object):
         elif config["model_name"] == "facebook/hubert-large-ls960-ft":
             self.model = HubertForCTC.from_pretrained(config["model_name"])
         else:
-            self.model = Wav2Vec2ForCTC.from_pretrained(config["model_name"])
+            self.model = Wav2Vec2ForCTC.from_pretrained(config["model_name"], ctc_loss_reduction="mean")  # be careful that we need to use mean
         
         self.model.train()  # huggingface default loads with eval mode
         self.model.cuda()
@@ -359,6 +359,111 @@ class SUTASystem(object):
         self.optimizer.step()
         self.model.zero_grad()
 
+    def match_entropy_loss(
+        self,
+        wavs,
+        target_logits: torch.FloatTensor=None,
+        pseudo_entropy_labels: torch.FloatTensor=None,
+        record=None
+    ):
+        inputs = self._wav_to_model_input(wavs)  # inputs belongs to a custom dict class defined in transformers, not tensor
+        inputs = inputs.to(device=self.model.device)
+        outputs = self.model(**inputs)
+        predicted_ids = torch.argmax(outputs.logits, dim=-1)
+        if target_logits is not None:
+            target_logits = target_logits.to(device=self.model.device)
+        if pseudo_entropy_labels is not None:
+            pseudo_entropy_labels = pseudo_entropy_labels.to(device=self.model.device)
+
+        loss = 0
+        if self.config["em_coef"] > 0:
+            non_blank = torch.where(predicted_ids != 0, 1, 0).bool()
+            x = softmax_entropy(outputs.logits / self.config["temp"])
+            if self.config["non_blank"]:
+                x = x[non_blank]
+            if len(x) > 0:
+                e_loss = x.mean(0).mean()
+            else:
+                e_loss = torch.tensor(0, device=self.model.device)
+                record["collapse"] = True
+            loss += e_loss * self.config["em_coef"]
+            record["e_loss"] = e_loss.item()
+
+        if self.config["match_coef"] > 0:
+            non_blank = torch.where(predicted_ids != 0, 1, 0).bool()
+            x = softmax_entropy(outputs.logits / self.config["temp"])
+            if target_logits is not None:
+                y = softmax_entropy(target_logits / self.config["temp"])
+            else:
+                y = pseudo_entropy_labels
+            if self.config["non_blank"]:
+                x, y = x[non_blank], y[non_blank]
+            if len(x) > 0:
+                diff = (x - y) ** 2
+                e_match_loss = diff.mean(0).mean()
+            else:
+                e_match_loss = torch.tensor(0, device=self.model.device)
+                record["collapse"] = True
+            loss += e_match_loss * self.config["match_coef"]
+            record["e_match_loss"] = e_match_loss.item()
+        
+        if 1 - self.config["em_coef"] - self.config["match_coef"] > 0: 
+            c_loss = mcc_loss(outputs.logits / self.config["temp"], self.config["reweight"])
+            loss += c_loss * (1 - self.config["em_coef"] - self.config["match_coef"])
+            record["c_loss"] = c_loss.item()
+
+        if self.config["div_coef"] > 0: 
+            d_loss = div_loss(outputs.logits, self.config["non_blank"]) 
+            loss += d_loss * self.config["div_coef"]
+            record["d_loss"] = d_loss.item()
+        
+        record["total_loss"] = loss.item()
+
+        if self.config["l2_coef"] > 0: 
+            l2_loss = self.l2_loss()
+            loss += l2_loss * self.config["l2_coef"]
+            record["l2_loss"] = l2_loss.item()
+        # print(record)
+        
+        return loss
+
+    def match_entropy_auto(
+        self,
+        wavs: list,
+        target_logits: list=None,
+        pseudo_entropy_labels: list=None,
+        batch_size=-1,
+        record=None
+    ) -> None:
+        assert batch_size == 1, "only support minibatch size 1 currently"
+        self.adapt_count += 1
+        if batch_size == -1:
+            batch_size == len(wavs)
+        self.model.zero_grad()
+        denom_scale = len(wavs) // batch_size
+        assert denom_scale > 0
+
+        targets = target_logits if target_logits is not None else pseudo_entropy_labels
+        assert targets is not None, "Either logits or pseudo labels should be given!"
+        for wavs, targets in zip(batchify(wavs, batch_size=batch_size), batchify(targets, batch_size=batch_size)):
+            if target_logits is not None:
+                loss = self.match_entropy_loss(wavs, target_logits=targets[0], record=record)
+            else:
+                loss = self.match_entropy_loss(wavs, pseudo_entropy_labels=targets[0], record=record)
+            if record.get("collapse", False):  # no grad
+                continue
+            loss = loss / denom_scale
+            loss.backward()
+    
+        self.optimizer.step()
+        self.model.zero_grad()
+
+    def match_entropy(self, wavs: list, target_logits: list=None, pseudo_entropy_labels: list=None, record=None) -> None:
+        assert len(wavs) == 1
+        assert target_logits is None or len(target_logits) == 1
+        assert pseudo_entropy_labels is None or len(pseudo_entropy_labels) == 1
+        self.match_entropy_auto(wavs, target_logits, pseudo_entropy_labels, batch_size=1, record=record)
+    
     @torch.no_grad()
     def inference(self, wavs):
         inputs = self._wav_to_model_input(wavs)

@@ -1,81 +1,49 @@
+import os
+import torch
 from torch.utils.data import Dataset
 import yaml
 from tqdm import tqdm
+import json
 from collections import defaultdict
 
-from ..system.suta import SUTASystem
-from ..utils.tool import wer
-from .base import IStrategy
+from ...system.suta import SUTASystem
+from ...utils.tool import wer
+from ..base import IStrategy
 
 
-class Buffer(object):
-    """ Easy implementation of buffer, use .data to access all data. """
-
-    data: list
-
-    def __init__(self, max_size: int=100) -> None:
-        self.max_size = max_size
-        self.data = []
-
-    def update(self, x):
-        self.data.append(x)
-        if len(self.data) > self.max_size:
-            self.data.pop(0)
-    
-    def clear(self):
-        self.data.clear()
-
-
-class DSUTAStrategy(IStrategy):
+class POEMUpperStrategy(IStrategy):
     def __init__(self, config) -> None:
         self.config = config
         self.strategy_config = config["strategy_config"]
         self.system = SUTASystem(config["system_config"])
         self.system.eval()
 
-        # Set slow system
-        self.slow_system = SUTASystem(config["system_config"])
-        self.slow_system.eval()
-        self.slow_system.snapshot("start")
-        self.timestep = 0
-        self.update_freq = config["strategy_config"]["update_freq"]
-        self.memory = Buffer(max_size=config["strategy_config"]["memory"])
+        self._log = None
 
-        self.system.snapshot("start")
-
-    def _init_start(self, sample):
-        self.system.load_snapshot("start")
-
-    def _adapt(self, sample):
+        # load target system 
+        self.target_system = SUTASystem(config["system_config"])
+        self.target_system.eval()
+    
+    def _init_start(self, sample) -> None:
+        self.system.load_snapshot("init")
+    
+    def _adapt(self, sample, target_sample):
         self.system.eval()
         is_collapse = False
         for _ in range(self.strategy_config["steps"]):
             record = {}
-            self.system.suta_adapt(
+            self.system.match_entropy(
                 wavs=[sample["wav"]],
+                target_logits=[torch.from_numpy(self.target_system.calc_logits([target_sample["wav"]]))],
                 record=record,
             )
             if record.get("collapse", False):
                 is_collapse = True
         if is_collapse:
             print("oh no")
-    
+
     def _update(self, sample):
-        self.memory.update(sample)
-        if (self.timestep + 1) % self.update_freq == 0:
-            self.slow_system.load_snapshot("start")
-            self.slow_system.eval()
-            record = {}
-            self.slow_system.suta_adapt_auto(
-                wavs=[s["wav"] for s in self.memory.data],
-                batch_size=1,
-                record=record,
-            )
-            if record.get("collapse", False):
-                print("oh no")
-            self.slow_system.snapshot("start")
-            self.memory.clear()
-        self.system.history["start"] = self.slow_system.history["start"]  # fetch start point from slow system
+        pass
     
     def inference(self, sample) -> str:
         self.system.eval()
@@ -85,14 +53,14 @@ class DSUTAStrategy(IStrategy):
     def run(self, ds: Dataset):
         long_cnt = 0
         self._log = defaultdict(list)
-        for sample in tqdm(ds):
+        for (target_sample, sample) in tqdm(ds):
             if len(sample["wav"]) > self.strategy_config["max_length"]:
                 long_cnt += 1
                 continue
             self._log["n_words"].append(len(sample["text"].split(" ")))
 
             self._init_start(sample)
-            self._adapt(sample)
+            self._adapt(sample, target_sample)
 
             trans = self.inference(sample)
             err = wer(sample["text"], trans)
@@ -109,20 +77,16 @@ class DSUTAStrategy(IStrategy):
             self._log["logits"].append(self.system.calc_logits([sample["wav"]])[0])
 
             self._update(sample)
-            self.timestep += 1
             
         print("#Too long: ", long_cnt)
         
         return self._log
-    
+        
     def get_adapt_count(self):
-        return self.system.adapt_count + self.slow_system.adapt_count
-
-    def load_checkpoint(self, path):
-        self.system.load(path)
+        return self.system.adapt_count
 
 
-class DSUTARescoreStrategy(DSUTAStrategy):
+class POEMUpperRescoreStrategy(POEMUpperStrategy):
     def inference(self, sample) -> str:
         self.system.eval()
         res = self.system.beam_inference([sample["wav"]], n_best=5, text_only=False)

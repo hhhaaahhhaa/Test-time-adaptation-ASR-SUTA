@@ -36,7 +36,6 @@ class RescoreStrategy(IStrategy):
     
     def run(self, ds: Dataset):
         long_cnt = 0
-        r = 0
         self._log = defaultdict(list)
         for sample in tqdm(ds):
             if len(sample["wav"]) > self.strategy_config["max_length"]:
@@ -57,7 +56,6 @@ class RescoreStrategy(IStrategy):
             self._log["losses"].append(loss)
 
             self._log["logits"].append(self.system.calc_logits([sample["wav"]])[0])
-            r += 1
             
         print("#Too long: ", long_cnt)
         

@@ -6,6 +6,7 @@ jiwer
 torchaudio
 soundfile
 matplotlib
+seaborn
 datasets
 openai
 librosa

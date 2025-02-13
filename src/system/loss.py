@@ -1,6 +1,9 @@
 import os 
 import torch
 from torch import nn
+import math
+
+from src.utils.distribution import Distribution
 
 
 def softmax_entropy(x, dim=2):
@@ -41,3 +44,13 @@ def div_loss(x, non_blank=None, L_thd=64):
     loss = -softmax_entropy(cls_pred, 0)
 
     return loss
+
+
+def kl_loss(observations, distribution: Distribution) -> torch.FloatTensor:
+    # kde estimation for q distribution with Scott’s Rule
+    n = len(observations[0])
+    h = n ** (-1. / 5)
+    xs = torch.tensor(distribution.quantiles).reshape(-1, 1)
+    log_kde_q = torch.logsumexp(-(xs - observations) ** 2 / 2 / (h ** 2), dim=-1) - math.log(n * h)
+    return -log_kde_q.mean()  # since KL(p||q) = E_P(logp - logq), while logp is identical over all choices
+        

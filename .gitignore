@@ -164,3 +164,4 @@ _*/
 results/
 src/utils/mos/fairseq
 src/utils/mos/pretrained
+tt*.py

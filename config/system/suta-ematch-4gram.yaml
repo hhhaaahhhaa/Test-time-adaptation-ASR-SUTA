@@ -1,0 +1,17 @@
+model_name: "patrickvonplaten/wav2vec2-base-960h-4-gram"
+
+opt: AdamW
+lr: 0.00002
+scheduler: null
+
+em_coef: 0.01
+match_coef: 1.0
+div_coef: 0
+non_blank: True
+train_feature: True
+train_LN: True
+train_all: False
+reweight: True
+bias_only: False
+temp: 2.5
+l2_coef: 0

@@ -17,6 +17,11 @@ BASIC = {
 DSUTA = {
     "dsuta": (f"{SRC_DIR}/dsuta.py", "DSUTAStrategy"),
     "dsuta-reset": (f"{SRC_DIR}/dsuta_reset.py", "DSUTAResetStrategy"),
+    "dsuta-rescore": (f"{SRC_DIR}/dsuta.py", "DSUTARescoreStrategy"),
+}
+
+KL = {
+    "suta-kl": (f"{SRC_DIR}/suta_kl.py", "SUTAKLStrategy"),
 }
 
 EC = {
@@ -32,7 +37,7 @@ MIX = {
 
 OTHER = {
     "awmc": (f"{SRC_DIR}/awmc.py", "AWMCStrategy"),
-    "litta": (f"{SRC_DIR}/mix/litta/py", "LITTAStrategy"),
+    "litta": (f"{SRC_DIR}/mix/litta.py", "LITTAStrategy"),
 }
 
 EXP = {
@@ -46,6 +51,19 @@ EXP = {
     "ssuta-rescore": (f"{SRC_DIR}/mix/ssuta.py", "SSUTARescoreStrategy"),
     "ssuta-LLM": (f"{SRC_DIR}/mix/ssuta.py", "SSUTALLMStrategy"),
     "psuta-rescore": (f"{SRC_DIR}/mix/psuta.py", "PSUTARescoreStrategy"),
+
+    "suta-traj": (f"{SRC_DIR}/trajectory.py", "SUTATrajectory"),
+}
+
+EMATCH = {
+    "poem-upper": (f"{SRC_DIR}/ematch/upperbound.py", "POEMUpperStrategy"),
+    "poem-upper-rescore": (f"{SRC_DIR}/ematch/upperbound.py", "POEMUpperRescoreStrategy"),
+    "dpoem-upper": (f"{SRC_DIR}/ematch/poem.py", "DPOEMUpperStrategy"),
+
+    "ot": (f"{SRC_DIR}/ematch/offline.py", "OptimalTransportStrategy"),
+    "ot-rescore": (f"{SRC_DIR}/ematch/offline.py", "OptimalTransportRescoreStrategy"),
+    "dot": (f"{SRC_DIR}/ematch/offline.py", "DOptimalTransportStrategy"),
+    "dot-rescore": (f"{SRC_DIR}/ematch/offline.py", "DOptimalTransportRescoreStrategy"),
 }
 
 STRATEGY_MAPPING = {
@@ -55,6 +73,7 @@ STRATEGY_MAPPING = {
     **MIX,
     **OTHER,
     **EXP,
+    **EMATCH,
 }
 
 
