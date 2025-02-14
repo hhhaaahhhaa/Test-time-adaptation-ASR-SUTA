@@ -14,4 +14,4 @@ reweight: True
 bias_only: False
 temp: 2.5
 
-suta_coef: 0.5
+suta_coef: 0.0

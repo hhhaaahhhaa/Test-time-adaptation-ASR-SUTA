@@ -69,6 +69,7 @@ EMATCH = {
 STRATEGY_MAPPING = {
     **BASIC,
     **DSUTA,
+    **KL,
     **EC,
     **MIX,
     **OTHER,

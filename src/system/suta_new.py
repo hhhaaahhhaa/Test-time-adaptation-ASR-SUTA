@@ -147,6 +147,7 @@ class SUTASystem(object):
         loss += (1 - self.config["suta_coef"]) * kl_loss
         record.update(kl_loss_record)
         record["total_loss"] = loss.item()
+        # print(record)
 
         return loss, record
 

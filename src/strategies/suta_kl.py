@@ -22,6 +22,8 @@ class SUTAKLStrategy(IStrategy):
         self.system = SUTASystem(config["system_config"])
         self.system.eval()
 
+        self.use_valid = self.strategy_config.get("use_kl_valid", False)
+
         self._log = None
 
         # load target system 
@@ -60,7 +62,7 @@ class SUTAKLStrategy(IStrategy):
         self.system.eval()
         is_collapse = False
 
-        if self.strategy_config["kl"]["valid"]:
+        if self.use_valid:
             score = self.system.calc_kl_loss([sample["wav"]], self._src_distribution)
             best_score, best_step = score, 0
             self.system.snapshot("best")
@@ -68,7 +70,7 @@ class SUTAKLStrategy(IStrategy):
         
         for idx in range(self.strategy_config["steps"]):
             record = {}
-            self.system.suta_kl_adapt(
+            self.system.suta_adapt(
                 wavs=[sample["wav"]],
                 record=record,
                 distribution=self._src_distribution
@@ -77,7 +79,7 @@ class SUTAKLStrategy(IStrategy):
                 is_collapse = True
 
             # validation
-            if self.strategy_config.get("use_kl_valid", False):
+            if self.use_valid:
                 self.system.adapt_count -= 1  # control adapt count and increase later
                 score = self.system.calc_kl_loss([sample["wav"]], self._src_distribution)
                 if score < best_score:
@@ -94,7 +96,7 @@ class SUTAKLStrategy(IStrategy):
         if is_collapse:
             print("oh no")
 
-        if self.strategy_config["kl"]["valid"]:
+        if self.use_valid:
             self.system.load_snapshot("best")
             self.system.adapt_count += best_step  # increase the count here
             self._log["best_steps"].append(best_step)
