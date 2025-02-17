@@ -63,7 +63,7 @@ class SUTAKLStrategy(IStrategy):
         is_collapse = False
 
         if self.use_valid:
-            score = self.system.calc_kl_loss([sample["wav"]], self._src_distribution)
+            score = self.system.calc_kl_loss([sample["wav"]], self._src_distribution)["kl_loss"]
             best_score, best_step = score, 0
             self.system.snapshot("best")
             patience_cnt = 0
@@ -81,7 +81,7 @@ class SUTAKLStrategy(IStrategy):
             # validation
             if self.use_valid:
                 self.system.adapt_count -= 1  # control adapt count and increase later
-                score = self.system.calc_kl_loss([sample["wav"]], self._src_distribution)
+                score = self.system.calc_kl_loss([sample["wav"]], self._src_distribution)["kl_loss"]
                 if score < best_score:
                     best_score, best_step = score, idx + 1
                     self.system.snapshot("best")
