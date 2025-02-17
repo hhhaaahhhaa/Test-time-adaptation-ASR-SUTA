@@ -7,7 +7,7 @@ import json
 from matplotlib import pyplot as plt
 from tqdm import tqdm
 
-from utils.tool import wer, unwrap_loss
+from src.utils.tool import wer, unwrap_loss
 
 
 def avg(data, n_words=None, window_size=10):

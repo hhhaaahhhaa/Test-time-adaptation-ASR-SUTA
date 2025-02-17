@@ -33,6 +33,26 @@ def batchify(data, batch_size, shuffle=False):
         yield batch_data
 
 
+def unwrap_loss(loss_data):
+    """
+    Transform nested list of dict into dict of nested list, all dicts should have same keys.
+    This is a recursive implementation.
+    """
+    def _unwrap(data: list):
+        res = {}
+        for x in data:
+            if isinstance(x, list):  # not last level
+                unwrapped_x = _unwrap(x)
+            else:
+                unwrapped_x = x
+            for key in unwrapped_x:
+                if key not in res:
+                    res[key] = []
+                res[key].append(unwrapped_x[key])
+        return res
+    return _unwrap(loss_data)
+
+
 def call_llm_OpenAI(client, model_name, msg, max_retries=5, timeout=5):
     retry_count = 0
     while retry_count < max_retries:

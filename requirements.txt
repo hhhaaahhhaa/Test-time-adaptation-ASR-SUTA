@@ -10,3 +10,4 @@ seaborn
 datasets
 openai
 librosa
+pyctcdecode
