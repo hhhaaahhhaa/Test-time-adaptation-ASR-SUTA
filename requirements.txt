@@ -1,6 +1,6 @@
 numpy==1.26.4
 torch==2.4.1
-transformers
+transformers==4.45.1
 pandas
 jiwer
 torchaudio
