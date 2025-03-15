@@ -15,8 +15,11 @@ from . import Define
 
 
 class LibriSpeechCorpus(object):
-    def __init__(self) -> None:
-        self.root = "_cache/LibriSpeech"
+    def __init__(self, split=None) -> None:
+        if split is None:
+            self.root = "_cache/LibriSpeech"
+        else:
+            self.root = f"_cache/LibriSpeech/{split}"
         with open(f"{self.root}/data_info.json", "r", encoding="utf-8") as f:
             self.data_info = json.load(f)
         

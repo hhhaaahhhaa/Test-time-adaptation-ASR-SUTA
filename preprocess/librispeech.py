@@ -68,6 +68,41 @@ def libirspeech_preprocess():
         json.dump(data_info, f, indent=4)
 
 
+def libirspeech_split_preprocess(split="train.clean.100", n_sample=500):  # download partial dataset
+    cache_dir = f"_cache/LibriSpeech/{split}"
+    os.makedirs(cache_dir, exist_ok=True)
+    os.makedirs(f"{cache_dir}/wav", exist_ok=True)
+    os.makedirs(f"{cache_dir}/text", exist_ok=True)
+
+    src_dataset = load_dataset(
+        "librispeech_asr",
+        split=split,
+        streaming=True,
+        trust_remote_code=True
+    )
+
+    data_info = []
+    for idx, instance in tqdm(enumerate(src_dataset)):
+        wav = librosa.resample(
+            instance["audio"]["array"],
+            orig_sr=src_dataset.features["audio"].sampling_rate,
+            target_sr=16000
+        )
+        basename = f"{idx:07d}"
+        wavfile.write(f"{cache_dir}/wav/{basename}.wav", 16000, (wav * 32767).astype(np.int16))
+        with open(f"{cache_dir}/text/{basename}.txt", "w", encoding="utf-8") as f:
+            f.write(instance["text"])
+        data_info.append({
+            "basename": basename,
+            "length": len(wav),
+            "text": instance["text"],
+        })
+        if len(data_info) == n_sample:
+            break
+    with open(f"{cache_dir}/data_info.json", "w", encoding="utf-8") as f:
+        json.dump(data_info, f, indent=4)
+
+
 def sythesize(noise_type: str, snr_level=10):
     type2noisefilename = {
         "AC": "AirConditioner_6",
@@ -109,7 +144,6 @@ def sythesize(noise_type: str, snr_level=10):
             noise = noise[0:len(clean_wav)]
 
         noisy_wav = snr_mixer(clean_wav, noise, snr=snr_level)
-        # assert 1 == 2
 
         wav_path = f"{output_dir}/wav/{query['basename']}.wav"
         text_path = f"{output_dir}/text/{query['basename']}.txt"
@@ -122,13 +156,16 @@ def sythesize(noise_type: str, snr_level=10):
 if __name__ == "__main__":
     np.random.seed(666)
     # libirspeech_preprocess()
-    sythesize("GS", snr_level=5)
+    # sythesize("GS", snr_level=5)
     # sythesize("AC", snr_level=5)
-    sythesize("AA", snr_level=5)
-    sythesize("BA", snr_level=5)
-    sythesize("CM", snr_level=5)
-    sythesize("MU", snr_level=5)
+    # sythesize("AA", snr_level=5)
+    # sythesize("BA", snr_level=5)
+    # sythesize("CM", snr_level=5)
+    # sythesize("MU", snr_level=5)
     # sythesize("TP", snr_level=5)
     # sythesize("SD", snr_level=5)
-    sythesize("NB", snr_level=5)
-    sythesize("VC", snr_level=5)
+    # sythesize("NB", snr_level=5)
+    # sythesize("VC", snr_level=5)
+
+    # libirspeech_split_preprocess(split="train.clean.100", n_sample=500)
+    libirspeech_split_preprocess(split="validation.clean", n_sample=500)

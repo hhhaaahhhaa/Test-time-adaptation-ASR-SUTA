@@ -36,11 +36,16 @@ CV_ACCENT = {
 }
 
 EXP = {
-    "accent0": (f"{SRC_DIR}/l2arctic.py", "SingleAccentSequence"),
-    "accent0-n": (f"{SRC_DIR}/l2arctic.py", "NoisySingleAccentSequence"),
-    "accent1": (f"{SRC_DIR}/l2arctic.py", "SingleAccentSequence"),
-    "accent1-n": (f"{SRC_DIR}/l2arctic.py", "NoisySingleAccentSequence"),
-    "speaker0": (f"{SRC_DIR}/l2arctic.py", "SingleSpeakerSequence"),
+    # "accent0": (f"{SRC_DIR}/l2arctic.py", "SingleAccentSequence"),
+    # "accent0-n": (f"{SRC_DIR}/l2arctic.py", "NoisySingleAccentSequence"),
+    # "accent1": (f"{SRC_DIR}/l2arctic.py", "SingleAccentSequence"),
+    # "accent1-n": (f"{SRC_DIR}/l2arctic.py", "NoisySingleAccentSequence"),
+    # "speaker0": (f"{SRC_DIR}/l2arctic.py", "SingleSpeakerSequence"),
+    "ls-r50": (f"{SRC_DIR}/ls_sub.py", "RandomSubset"),
+    "ls-best50": (f"{SRC_DIR}/ls_sub.py", "BestRescoreSubset"),
+    "ls-worst50": (f"{SRC_DIR}/ls_sub.py", "WorstRescoreSubset"),
+    "ls-train": (f"{SRC_DIR}/ls_sub.py", "TrainingSubset"),
+    "ls-val": (f"{SRC_DIR}/ls_sub.py", "ValidationSubset"),
 }
 
 TASK_MAPPING = {

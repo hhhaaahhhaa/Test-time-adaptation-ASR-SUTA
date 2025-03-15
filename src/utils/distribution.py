@@ -32,6 +32,9 @@ class Distribution(object):
         except:
             return 0.0
 
+    def mu(self) -> float:
+        return sum(self.quantiles) / self.bins
+    
     def value2quantile(self, obs: float) -> int:
         return max(0, bisect(self.quantiles, obs) - 1)
 
@@ -80,7 +83,7 @@ class Distribution(object):
 
         if title == "":
             title = "Empirical CDF and Density Function"
-        plt.title(title)
+        plt.title(f"{title}(mu={self.mu():.2f})")
         plt.savefig(output_path)
         plt.close()
 

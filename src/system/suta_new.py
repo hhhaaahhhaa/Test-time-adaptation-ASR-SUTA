@@ -224,7 +224,10 @@ class SUTASystem(object):
         # CAUTION:
         # See https://www.youtube.com/watch?v=mp7fHMTnK9A for definition of alpha and beta, and note that the defualt 
         # value of beta is not 0, which includes word length penalty and therefore not pure LM score
-        res = self.processor.batch_decode(logits.cpu().numpy(), n_best=n_best, alpha=0.5, beta=0.0)
+        if len(logits) == 1:  # no batch
+            res = self.processor.decode(logits[0].cpu().numpy(), n_best=n_best, alpha=0.5, beta=0.0)
+        else:
+            res = self.processor.batch_decode(logits.cpu().numpy(), n_best=n_best, alpha=0.5, beta=0.0)
         if not text_only:
             return res
         transcription = res.text

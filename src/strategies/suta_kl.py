@@ -9,6 +9,7 @@ from collections import defaultdict
 from ..system.suta_new import SUTASystem, softmax_entropy
 from ..utils.tool import wer
 from ..utils.distribution import Distribution
+from ..utils.distribution_factory import generate_distribution
 from .base import IStrategy
 
 
@@ -30,6 +31,12 @@ class SUTAKLStrategy(IStrategy):
         self.target_system = SUTASystem(config["system_config"])
         self.target_system.eval()
 
+    def _load_distribution(self, path) -> Distribution:
+        assert os.path.exists(path)
+        distribution = Distribution()
+        distribution.load(path)
+        return distribution
+    
     def _get_distrubution(self, task_name: str) -> Distribution:
         from src.tasks.load import get_task
         ds = get_task(task_name)
@@ -107,15 +114,21 @@ class SUTAKLStrategy(IStrategy):
     def inference(self, sample) -> str:
         self.system.eval()
         res = self.system.beam_inference([sample["wav"]], n_best=5, text_only=False)
-        merged_score = list(res.lm_score)[0]
+        merged_score = list(res.lm_score)
         self._log["merged_score"].append(merged_score)
-        nbest_trans = list(res.text)[0]
+        nbest_trans = list(res.text)
         self._log["nbest_trans"].append(nbest_trans)  # not exactly n results due to deduplication
         return nbest_trans[0]
     
     def run(self, ds: Dataset):
         # preparation
-        self._src_distribution = self._get_distrubution(task_name="librispeech_random")
+        task_name = self.strategy_config.get("ref_task_name", "librispeech_random")
+        if task_name.startswith("synth_"):
+            task_name = task_name[6:]
+            self._src_distribution = generate_distribution(task_name)
+        else:
+            self._src_distribution = self._get_distrubution(task_name)
+        # self._src_distribution = self._load_distribution("_vis/select/chime_random/suta-rescore-oracle.json")
 
         long_cnt = 0
         self._log = defaultdict(list)
@@ -150,3 +163,53 @@ class SUTAKLStrategy(IStrategy):
     
     def get_adapt_count(self):
         return self.system.adapt_count
+
+
+class SUTALMStrategy(SUTAKLStrategy):
+    def calc_lm_score(self, sample):
+        res = self.system.beam_inference([sample["wav"]], n_best=5, text_only=False)
+        s = list(res.lm_score)[0]
+        return -s
+
+    def _adapt(self, sample):
+        self.system.eval()
+        is_collapse = False
+
+        if self.use_valid:
+            score = self.calc_lm_score(sample)
+            best_score, best_step = score, 0
+            self.system.snapshot("best")
+            patience_cnt = 0
+        
+        for idx in range(self.strategy_config["steps"]):
+            record = {}
+            self.system.suta_adapt(
+                wavs=[sample["wav"]],
+                record=record,
+                distribution=self._src_distribution
+            )
+            if record.get("collapse", False):
+                is_collapse = True
+
+            # validation
+            if self.use_valid:
+                self.system.adapt_count -= 1  # control adapt count and increase later
+                score = self.calc_lm_score(sample)
+                if score < best_score:
+                    best_score, best_step = score, idx + 1
+                    self.system.snapshot("best")
+                    patience_cnt = 0
+                else:
+                    patience_cnt += 1
+            
+                # early stop
+                if "kl_patience" in self.strategy_config and patience_cnt == self.strategy_config["kl_patience"]:
+                    break
+
+        if is_collapse:
+            print("oh no")
+
+        if self.use_valid:
+            self.system.load_snapshot("best")
+            self.system.adapt_count += best_step  # increase the count here
+            self._log["best_steps"].append(best_step)

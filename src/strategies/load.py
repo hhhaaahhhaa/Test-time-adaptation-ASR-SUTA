@@ -22,6 +22,7 @@ DSUTA = {
 
 KL = {
     "suta-kl": (f"{SRC_DIR}/suta_kl.py", "SUTAKLStrategy"),
+    "suta-lm": (f"{SRC_DIR}/suta_kl.py", "SUTALMStrategy"),
 }
 
 EC = {

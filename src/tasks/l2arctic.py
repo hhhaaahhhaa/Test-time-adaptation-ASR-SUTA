@@ -2,7 +2,7 @@ import numpy as np
 from torch.utils.data import Dataset
 import random
 
-from preprocess.librispeech_noise import snr_mixer
+from preprocess.librispeech import snr_mixer
 from ..corpus.corpus import L2ArcticCorpus
 from ..corpus.noise import MUSANNoiseCorpus
 
