@@ -3,7 +3,7 @@ import yaml
 from tqdm import tqdm
 from collections import defaultdict
 
-from ..system.suta import SUTASystem
+from ..system.suta_new import SUTASystem
 from ..utils.tool import wer
 from .base import IStrategy
 
@@ -126,8 +126,8 @@ class DSUTARescoreStrategy(DSUTAStrategy):
     def inference(self, sample) -> str:
         self.system.eval()
         res = self.system.beam_inference([sample["wav"]], n_best=5, text_only=False)
-        merged_score = list(res.lm_score)[0]
+        merged_score = list(res.lm_score)
         self._log["merged_score"].append(merged_score)
-        nbest_trans = list(res.text)[0]
+        nbest_trans = list(res.text)
         self._log["nbest_trans"].append(nbest_trans)  # not exactly n results due to deduplication
         return nbest_trans[0]

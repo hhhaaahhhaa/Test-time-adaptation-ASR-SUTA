@@ -4,7 +4,7 @@ from tqdm import tqdm
 from collections import defaultdict
 from transformers import Wav2Vec2Processor, Wav2Vec2ProcessorWithLM
 
-from ..system.suta import SUTASystem
+from ..system.suta_new import SUTASystem
 from ..utils.tool import wer
 from .base import IStrategy
 
@@ -34,7 +34,7 @@ class SUTATrajectory(IStrategy):
         trans = self.inference(sample)
         err = wer(sample["text"], trans)
         trajectory["suta-wer"].append(err)
-        trans = self.lm_inference(sample)
+        trans = self.lm_inference(sample, trajectory)
         err = wer(sample["text"], trans)
         trajectory["suta-rescore-wer"].append(err)
         for _ in range(self.strategy_config["steps"]):
@@ -68,14 +68,14 @@ class SUTATrajectory(IStrategy):
         trans = self.system.inference([sample["wav"]])[0]
         return trans
 
-    def lm_inference(self, sample) -> str:
+    def lm_inference(self, sample, trajectory) -> str:  # trajectory is passed for recording
         self.system.eval()
         self.system.processor = self.processor_with_lm
         res = self.system.beam_inference([sample["wav"]], n_best=5, text_only=False)
-        merged_score = list(res.lm_score)[0]
-        # self._log["merged_score"].append(merged_score)
-        nbest_trans = list(res.text)[0]
-        # self._log["nbest_trans"].append(nbest_trans)  # not exactly n results due to deduplication
+        merged_score = list(res.lm_score)
+        trajectory["merged_score"].append(merged_score)
+        nbest_trans = list(res.text)
+        trajectory["nbest_trans"].append(nbest_trans)  # not exactly n results due to deduplication
         return nbest_trans[0]
     
     def run(self, ds: Dataset):

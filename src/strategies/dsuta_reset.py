@@ -5,7 +5,7 @@ from tqdm import tqdm
 import scipy.stats
 import statistics
 
-from ..system.suta import SUTASystem
+from ..system.suta_new import SUTASystem
 from ..utils.tool import wer
 from .base import IStrategy
 from .dsuta import Buffer

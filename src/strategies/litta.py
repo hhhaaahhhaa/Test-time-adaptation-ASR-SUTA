@@ -5,9 +5,9 @@ from tqdm import tqdm
 import json
 from collections import defaultdict
 
-from ...system.suta import SUTASystem
-from ...utils.tool import wer
-from ..base import IStrategy
+from ..system.suta import SUTASystem
+from ..utils.tool import wer
+from .base import IStrategy
 from visplot.utils import load_results
 
 
@@ -69,10 +69,10 @@ class LITTAStrategy(IStrategy):
             self._log["basenames"].append(sample["id"])
 
             # loss
-            loss = self.system.calc_suta_loss([sample["wav"]])
-            ctc_loss = self.system.calc_ctc_loss([sample["wav"]], [sample["text"]])
-            loss["ctc_loss"] = ctc_loss["ctc_loss"]
-            self._log["losses"].append(loss)
+            # loss = self.system.calc_suta_loss([sample["wav"]])
+            # ctc_loss = self.system.calc_ctc_loss([sample["wav"]], [sample["text"]])
+            # loss["ctc_loss"] = ctc_loss["ctc_loss"]
+            # self._log["losses"].append(loss)
 
             self._log["logits"].append(self.system.calc_logits([sample["wav"]])[0])
 

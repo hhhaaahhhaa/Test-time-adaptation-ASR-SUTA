@@ -10,8 +10,8 @@ SRC_DIR = "src/strategies"
 BASIC = {
     "none": (f"{SRC_DIR}/basic.py", "NoStrategy"),
     "suta": (f"{SRC_DIR}/basic.py", "SUTAStrategy"),
-    "csuta": (f"{SRC_DIR}/basic.py", "CSUTAStrategy"),
-    "sdpl": (f"{SRC_DIR}/basic.py", "SDPLStrategy"),
+    "rescore": (f"{SRC_DIR}/basic.py", "RescoreStrategy"),
+    "suta-rescore": (f"{SRC_DIR}/basic.py", "SUTARescoreStrategy"),
 }
 
 DSUTA = {
@@ -26,19 +26,19 @@ KL = {
 }
 
 EC = {
-    "rescore": (f"{SRC_DIR}/error_correction.py", "RescoreStrategy"),
-    "LLM": (f"{SRC_DIR}/error_correction.py", "LLMStrategy"),
+    # "LLM": (f"{SRC_DIR}/error_correction.py", "LLMStrategy"),
     # "aLLM": (f"{SRC_DIR}/error_correction.py", "AsyncLLMStrategy"),
 }
 
 MIX = {
-    "suta-rescore": (f"{SRC_DIR}/mix/suta.py", "SUTARescoreStrategy"),
-    "suta-LLM": (f"{SRC_DIR}/mix/suta.py", "SUTALLMStrategy"),
+    # "suta-LLM": (f"{SRC_DIR}/mix/suta.py", "SUTALLMStrategy"),
 }
 
 OTHER = {
+    "csuta": (f"{SRC_DIR}/other.py", "CSUTAStrategy"),
+    "sdpl": (f"{SRC_DIR}/other.py", "SDPLStrategy"),
     "awmc": (f"{SRC_DIR}/awmc.py", "AWMCStrategy"),
-    "litta": (f"{SRC_DIR}/mix/litta.py", "LITTAStrategy"),
+    "litta": (f"{SRC_DIR}/litta.py", "LITTAStrategy"),
 }
 
 EXP = {

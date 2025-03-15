@@ -7,7 +7,7 @@ import json
 from collections import defaultdict
 from tqdm.asyncio import tqdm_asyncio
 
-from ..system.suta import SUTASystem
+from ..system.suta_new import SUTASystem
 from ..utils.async_request import OrderPreservedAsyncRequestHandler
 from ..utils.tool import wer, call_llm_AsyncOpenAI, call_llm_OpenAI
 from ..utils.prompter import Prompter
@@ -26,9 +26,9 @@ class RescoreStrategy(IStrategy):
     
     def inference(self, sample) -> str:
         res = self.system.beam_inference([sample["wav"]], n_best=5, text_only=False)
-        merged_score = list(res.lm_score)[0]
+        merged_score = list(res.lm_score)
         self._log["merged_score"].append(merged_score)
-        nbest_trans = list(res.text)[0]
+        nbest_trans = list(res.text)
         self._log["nbest_trans"].append(nbest_trans)  # not exactly n results due to deduplication
         # if len(nbest_trans) != 5:
         #     print("Less than nbest: ", len(nbest_trans))
