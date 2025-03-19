@@ -23,6 +23,7 @@ DSUTA = {
 KL = {
     "suta-kl": (f"{SRC_DIR}/suta_kl.py", "SUTAKLStrategy"),
     "suta-lm": (f"{SRC_DIR}/suta_kl.py", "SUTALMStrategy"),
+    "suta-ml": (f"{SRC_DIR}/suta_kl.py", "SUTAMLStrategy"),
 }
 
 EC = {
@@ -54,6 +55,7 @@ EXP = {
     "psuta-rescore": (f"{SRC_DIR}/mix/psuta.py", "PSUTARescoreStrategy"),
 
     "suta-traj": (f"{SRC_DIR}/trajectory.py", "SUTATrajectory"),
+    "dsuta-traj": (f"{SRC_DIR}/trajectory.py", "DSUTATrajectory"),
 }
 
 EMATCH = {

@@ -253,6 +253,16 @@ class SUTASystem(object):
         _, record = self.kl_loss(outputs, distribution)
 
         return record
+    
+    @torch.no_grad()
+    def calc_probability(self, wavs) -> float:
+        assert len(wavs) == 1
+        inputs = self._wav_to_model_input(wavs)  # inputs belongs to a custom dict class defined in transformers, not tensor
+        inputs = inputs.to(device=self.model.device)
+        outputs = self.model(**inputs).logits
+        probability = outputs.log_softmax(dim=-1).sum().item()  # all experiments do not use length normalization to maintain simplicity
+
+        return probability
 
     @torch.no_grad()
     def calc_ctc_loss(self, wavs, texts):

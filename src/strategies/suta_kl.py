@@ -213,3 +213,57 @@ class SUTALMStrategy(SUTAKLStrategy):
             self.system.load_snapshot("best")
             self.system.adapt_count += best_step  # increase the count here
             self._log["best_steps"].append(best_step)
+
+
+class SUTAMLStrategy(SUTAKLStrategy):
+    """ Maximum Likelihood """
+    def inference(self, sample) -> str:
+        self.system.eval()
+        trans = self.system.inference([sample["wav"]])[0]
+        return trans
+    
+    def calc_score(self, sample):
+        return self.system.calc_probability([sample["wav"]])
+
+    def _adapt(self, sample):
+        self.system.eval()
+        is_collapse = False
+
+        if self.use_valid:
+            score = self.calc_score(sample)
+            best_score, best_step = score, 0
+            self.system.snapshot("best")
+            patience_cnt = 0
+        
+        for idx in range(self.strategy_config["steps"]):
+            record = {}
+            self.system.suta_adapt(
+                wavs=[sample["wav"]],
+                record=record,
+                distribution=self._src_distribution
+            )
+            if record.get("collapse", False):
+                is_collapse = True
+
+            # validation
+            if self.use_valid:
+                self.system.adapt_count -= 1  # control adapt count and increase later
+                score = self.calc_score(sample)
+                if score > best_score:
+                    best_score, best_step = score, idx + 1
+                    self.system.snapshot("best")
+                    patience_cnt = 0
+                else:
+                    patience_cnt += 1
+            
+                # early stop
+                if "kl_patience" in self.strategy_config and patience_cnt == self.strategy_config["kl_patience"]:
+                    break
+
+        if is_collapse:
+            print("oh no")
+
+        if self.use_valid:
+            self.system.load_snapshot("best")
+            self.system.adapt_count += best_step  # increase the count here
+            self._log["best_steps"].append(best_step)
