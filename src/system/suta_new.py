@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor, Wav2Vec2ProcessorWithLM
 from transformers import HubertForCTC, Data2VecAudioForCTC
 from copy import deepcopy
@@ -19,19 +20,25 @@ class SUTASystem(object):
         self.history = {}
         self.adapt_count = 0
 
-        # load model and tokenizer
-        if config["model_name"] == "patrickvonplaten/wav2vec2-base-960h-4-gram":
-            self.processor = Wav2Vec2ProcessorWithLM.from_pretrained(config["model_name"])
+        # load processor and model
+        raw_processor_no_lm = Wav2Vec2Processor.from_pretrained(config["model_name"], sampling_rate=SUTASystem.SAMPLE_RATE)
+        if config.get("use_lm", False) or config["model_name"] == "patrickvonplaten/wav2vec2-base-960h-4-gram":
+            ngram_decoder = Wav2Vec2ProcessorWithLM.from_pretrained("patrickvonplaten/wav2vec2-base-960h-4-gram").decoder
+            self.processor = Wav2Vec2ProcessorWithLM(
+                feature_extractor=raw_processor_no_lm.feature_extractor,
+                tokenizer=raw_processor_no_lm.tokenizer,
+                decoder=ngram_decoder
+            )
         else:
-            self.processor = Wav2Vec2Processor.from_pretrained(config["model_name"], sampling_rate=SUTASystem.SAMPLE_RATE)
+            self.processor = raw_processor_no_lm
         
-        # Model ablation
         if config["model_name"] == "facebook/data2vec-audio-base-960h":
-            self.model = Data2VecAudioForCTC.from_pretrained(config["model_name"])
+            self.model = Data2VecAudioForCTC.from_pretrained(config["model_name"], ctc_loss_reduction="mean")
         elif config["model_name"] == "facebook/hubert-large-ls960-ft":
-            self.model = HubertForCTC.from_pretrained(config["model_name"])
+            self.model = HubertForCTC.from_pretrained(config["model_name"], ctc_loss_reduction="mean")
         else:
-            self.model = Wav2Vec2ForCTC.from_pretrained(config["model_name"], ctc_loss_reduction="mean")  # be careful that we need to use mean
+            # self.model = Wav2Vec2ForCTC.from_pretrained(config["model_name"], ctc_loss_reduction="mean")  # be careful that we need to use mean
+            self.model = Wav2Vec2ForCTC.from_pretrained(config["model_name"])
         
         self.model.train()  # huggingface default loads with eval mode
         self.model.cuda()
@@ -135,6 +142,43 @@ class SUTASystem(object):
         record["kl_loss"] = loss.item()
         record["total_loss"] = loss.item()
         return loss, record
+    
+    def logit_loss(self, outputs, target_logits: torch.FloatTensor):
+        record = {}
+        x = softmax_entropy(outputs.logits / self.config["temp"])  # B, L
+        y = softmax_entropy(target_logits / self.config["temp"]).to(x.device)  # B, L
+        loss = torch.mean((x - y) ** 2)
+        record["logit_loss"] = loss.item()
+        record["total_loss"] = loss.item()
+        return loss, record
+    
+    def come_loss(self, outputs):
+        predicted_ids = torch.argmax(outputs.logits, dim=-1)
+        record = {}
+        loss = 0
+        non_blank = torch.where(predicted_ids != 0, 1, 0).bool()
+        x = F.relu(outputs.logits)  # COME require logits >= 0
+        # COME
+        n_cls = x.shape[-1]
+        x = x / torch.norm(x, p=2, dim=-1, keepdim=True) * torch.norm(x, p=2, dim=-1, keepdim=True).detach()
+        belief = torch.exp(x) / (torch.sum(torch.exp(x), dim=-1, keepdim=True) + n_cls)
+        uncertainty = n_cls / (torch.sum(torch.exp(x), dim=-1, keepdim=True) + n_cls)
+        opinion = torch.cat([belief, uncertainty], dim=-1)
+        x = -(opinion * torch.log(opinion)).sum(dim=2)
+
+        if self.config["non_blank"]:
+            x = x[non_blank]
+        if len(x) > 0:
+            e_loss = x.mean(0).mean()
+        else:
+            e_loss = torch.tensor(0, device=self.model.device)
+            record["collapse"] = True
+        loss += e_loss
+        record["e_loss"] = e_loss.item()
+
+        record["total_loss"] = loss.item()
+
+        return loss, record
 
     def suta_kl_loss(self, outputs, distribution):
         record = {}
@@ -188,7 +232,8 @@ class SUTASystem(object):
         self.model.zero_grad()
         denom_scale = len(wavs) // batch_size
         assert denom_scale > 0
-        for wavs in batchify(wavs, batch_size=batch_size):
+        assert batch_size == 1  # currently only support bs=1
+        for wavs, texts in zip(batchify(wavs, batch_size=batch_size), batchify(texts, batch_size=batch_size)):
             inputs = self._wav_to_model_input(wavs)
             labels = self._text_to_model_input(texts)
             if labels.shape[1] == 0:  # empty string exception, e.g. PL collapse
@@ -198,11 +243,55 @@ class SUTASystem(object):
 
             outputs = self.model(**inputs)
             loss = outputs.loss
-            record["ctc_loss"] = loss.item()
-            record["total_loss"] = loss.item()
-
+            loss = loss / denom_scale
+            record["ctc_loss"] += loss.item()
+            record["total_loss"] += loss.item()
+            loss.backward()
+        self.optimizer.step()
+        self.model.zero_grad()
+    
+    def logit_adapt(
+        self,
+        wavs,
+        logits,
+        batch_size=1,
+        record=None,
+    ):
+        self.adapt_count += 1
+        self.model.zero_grad()
+        denom_scale = len(wavs) // batch_size
+        assert denom_scale > 0
+        assert batch_size == 1  # currently only support bs=1
+        for wavs, logits in zip(batchify(wavs, batch_size=batch_size), batchify(logits, batch_size=batch_size)):
+            inputs = self._wav_to_model_input(wavs)
+            inputs = inputs.to(device=self.model.device)
+            outputs = self.model(**inputs)
+            loss, loss_record = self.logit_loss(outputs, logits[0])
+            record.update(loss_record)
             loss = loss / denom_scale
             loss.backward()
+        self.optimizer.step()
+        self.model.zero_grad()
+
+    def come_adapt(
+        self,
+        wavs,
+        batch_size=1,
+        record=None,
+    ):
+        self.adapt_count += 1
+        self.model.zero_grad()
+        denom_scale = len(wavs) // batch_size
+        assert denom_scale > 0
+        for wavs in batchify(wavs, batch_size=batch_size):
+            inputs = self._wav_to_model_input(wavs)  # inputs belongs to a custom dict class defined in transformers, not tensor
+            inputs = inputs.to(device=self.model.device)
+            outputs = self.model(**inputs)
+            loss, loss_record = self.come_loss(outputs)
+            record.update(loss_record)
+            loss = loss / denom_scale
+            if not record.get("collapse", False):
+                loss.backward()
         self.optimizer.step()
         self.model.zero_grad()
     
@@ -351,6 +440,13 @@ class SUTASystem(object):
                     params.append(p)
                     names.append(np)
         
+        if self.config.get("train_last", False):
+            for np, p in self.model.named_parameters():
+                if "encoder.layers.11" in np:
+                    p.requires_grad = True
+                    params.append(p)
+                    names.append(np)
+
         for nm, m in self.model.named_modules():
             # print(nm)
             if self.config["train_LN"]: 

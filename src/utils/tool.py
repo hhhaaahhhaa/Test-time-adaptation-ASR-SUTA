@@ -4,6 +4,13 @@ import random
 import jiwer
 
 
+def wav_normalization(wav: np.array) -> np.array:
+    denom = max(abs(wav))
+    if denom == 0 or np.isnan(denom):
+        raise ValueError
+    return wav / denom
+
+
 def wer(a, b):
     a = jiwer.RemovePunctuation()(a)
     b = jiwer.RemovePunctuation()(b)
