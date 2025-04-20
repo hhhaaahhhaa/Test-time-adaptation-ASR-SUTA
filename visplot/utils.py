@@ -132,3 +132,38 @@ def plot_attn(info):
     fig.tight_layout()
 
     return fig
+
+
+def plot_asr_heatmap(probs, vocab=None, show_top_token=True, figsize=(50, 6)):
+    """
+    Plot a heatmap of ASR output probabilities over time.
+    
+    Args:
+        probs (np.ndarray): ASR output probabilities with shape (T, V).
+        vocab (List[str], optional): List of vocabulary tokens. Defaults to indices if None.
+        show_top_token (bool): Whether to annotate the top token at each time step.
+        figsize (tuple): Figure size for the plot.
+    """
+    T, V = probs.shape
+    if vocab is None:
+        vocab = [str(i) for i in range(V)]
+
+    fig, ax = plt.subplots(figsize=figsize)
+    cax = ax.imshow(probs.T, aspect='auto', origin='lower', cmap='viridis')
+
+    ax.set_xlabel("Time Step")
+    ax.set_ylabel("Vocabulary Token")
+    ax.set_yticks(np.arange(V))
+    ax.set_yticklabels(vocab)
+    ax.set_title("ASR Output Probability Heatmap")
+
+    fig.colorbar(cax, ax=ax, label="Probability")
+
+    if show_top_token:
+        top_tokens = np.argmax(probs, axis=1)
+        for t, token_idx in enumerate(top_tokens):
+            if token_idx == 0:
+                continue
+            ax.text(t, token_idx+1, vocab[token_idx], ha='center', va='center', color='white', fontsize=8, fontweight='bold')
+    plt.tight_layout()
+    return fig
