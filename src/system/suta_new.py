@@ -22,6 +22,7 @@ class SUTASystem(object):
 
         # load processor and model
         raw_processor_no_lm = Wav2Vec2Processor.from_pretrained(config["model_name"], sampling_rate=SUTASystem.SAMPLE_RATE)
+        self.raw_processor_no_lm = raw_processor_no_lm
         if config.get("use_lm", False) or config["model_name"] == "patrickvonplaten/wav2vec2-base-960h-4-gram":
             ngram_decoder = Wav2Vec2ProcessorWithLM.from_pretrained("patrickvonplaten/wav2vec2-base-960h-4-gram").decoder
             self.processor = Wav2Vec2ProcessorWithLM(
@@ -151,34 +152,6 @@ class SUTASystem(object):
         record["logit_loss"] = loss.item()
         record["total_loss"] = loss.item()
         return loss, record
-    
-    def come_loss(self, outputs):
-        predicted_ids = torch.argmax(outputs.logits, dim=-1)
-        record = {}
-        loss = 0
-        non_blank = torch.where(predicted_ids != 0, 1, 0).bool()
-        x = F.relu(outputs.logits)  # COME require logits >= 0
-        # COME
-        n_cls = x.shape[-1]
-        x = x / torch.norm(x, p=2, dim=-1, keepdim=True) * torch.norm(x, p=2, dim=-1, keepdim=True).detach()
-        belief = torch.exp(x) / (torch.sum(torch.exp(x), dim=-1, keepdim=True) + n_cls)
-        uncertainty = n_cls / (torch.sum(torch.exp(x), dim=-1, keepdim=True) + n_cls)
-        opinion = torch.cat([belief, uncertainty], dim=-1)
-        x = -(opinion * torch.log(opinion)).sum(dim=2)
-
-        if self.config["non_blank"]:
-            x = x[non_blank]
-        if len(x) > 0:
-            e_loss = x.mean(0).mean()
-        else:
-            e_loss = torch.tensor(0, device=self.model.device)
-            record["collapse"] = True
-        loss += e_loss
-        record["e_loss"] = e_loss.item()
-
-        record["total_loss"] = loss.item()
-
-        return loss, record
 
     def suta_kl_loss(self, outputs, distribution):
         record = {}
@@ -273,37 +246,19 @@ class SUTASystem(object):
         self.optimizer.step()
         self.model.zero_grad()
 
-    def come_adapt(
-        self,
-        wavs,
-        batch_size=1,
-        record=None,
-    ):
-        self.adapt_count += 1
-        self.model.zero_grad()
-        denom_scale = len(wavs) // batch_size
-        assert denom_scale > 0
-        for wavs in batchify(wavs, batch_size=batch_size):
-            inputs = self._wav_to_model_input(wavs)  # inputs belongs to a custom dict class defined in transformers, not tensor
-            inputs = inputs.to(device=self.model.device)
-            outputs = self.model(**inputs)
-            loss, loss_record = self.come_loss(outputs)
-            record.update(loss_record)
-            loss = loss / denom_scale
-            if not record.get("collapse", False):
-                loss.backward()
-        self.optimizer.step()
-        self.model.zero_grad()
-    
     # inference
     @torch.no_grad()
-    def inference(self, wavs):
+    def inference(self, wavs, return_logits=False):
         inputs = self._wav_to_model_input(wavs)
         outputs = self.model(**inputs).logits
         predicted_ids = torch.argmax(outputs, dim=-1)
-        transcription = self.processor.batch_decode(predicted_ids)
+        transcription = self.raw_processor_no_lm.batch_decode(predicted_ids)
         
-        return list(transcription)
+        if return_logits:
+            logits = outputs.detach().cpu().numpy()
+            return list(transcription), logits
+        else:
+            return list(transcription)
     
     @torch.no_grad()
     def beam_inference(self, wavs, n_best=1, text_only=True):
@@ -353,6 +308,27 @@ class SUTASystem(object):
 
         return probability
 
+    def calc_lm_score(self, text, normalized=False) -> float:
+        self.processor.decoder.reset_params(  # CAUTION: need to reset to correct parameters or else will mismatch beam search scores!
+            alpha=1.0, beta=0.0, unk_score_offset=None, lm_score_boundary=None
+        )
+        lm = self.processor.decoder._language_model
+        raw_lm_score = 0.0
+        start_state = lm.get_start_state()
+        words = text.split(" ")
+        n_word = len(words)
+        for idx in range(n_word):
+            score, start_state = lm.score(start_state, words[idx], is_last_word=False)
+            # print("Word: ", words[idx], score)
+            raw_lm_score += score
+        
+        # finalize
+        score, _ = lm.score(start_state, "", is_last_word=True)
+        raw_lm_score += score
+        if normalized:
+            raw_lm_score = raw_lm_score / (n_word + 1)
+        return raw_lm_score
+    
     @torch.no_grad()
     def calc_ctc_loss(self, wavs, texts):
         assert len(wavs) == 1

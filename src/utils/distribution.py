@@ -53,7 +53,7 @@ class Distribution(object):
     def clear(self):
         self.values = []
 
-    def visualize(self, output_path: str, title="", value_name="Value"):
+    def visualize(self, output_path: str, title="", value_name="Value", xlim=(0, 5)):
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
         # Create figure
@@ -74,8 +74,8 @@ class Distribution(object):
         ax2.tick_params(axis="y", labelcolor="red")
 
         # Limit x-axis
-        ax1.set_xlim(0, 5)
-        ax2.set_xlim(0, 5)
+        ax1.set_xlim(*xlim)
+        ax2.set_xlim(*xlim)
 
         # Add legends
         ax1.legend(loc="upper right")

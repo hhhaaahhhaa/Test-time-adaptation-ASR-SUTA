@@ -2,6 +2,7 @@ import numpy as np
 import torch
 import random
 import jiwer
+import pickle
 
 
 def wav_normalization(wav: np.array) -> np.array:
@@ -98,3 +99,9 @@ async def call_llm_AsyncOpenAI(client, model_name, msg, max_retries=5, timeout=5
         # Increment retry counter
         retry_count += 1
     return res if retry_count < max_retries else None
+
+
+def load_results(exp_root: str):
+    with open (f"{exp_root}/result/results.pkl", "rb") as f:
+        log = pickle.load(f)
+    return log

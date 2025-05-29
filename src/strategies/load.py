@@ -20,10 +20,12 @@ DSUTA = {
     "dsuta-rescore": (f"{SRC_DIR}/dsuta.py", "DSUTARescoreStrategy"),
 }
 
-KL = {
-    "suta-kl": (f"{SRC_DIR}/suta_kl.py", "SUTAKLStrategy"),
-    "suta-lm": (f"{SRC_DIR}/suta_kl.py", "SUTALMStrategy"),
-    "suta-ml": (f"{SRC_DIR}/suta_kl.py", "SUTAMLStrategy"),
+SUTALM = {
+    "suta-lm": (f"{SRC_DIR}/suta_lm.py", "SUTALMStrategy"),
+}
+
+AUTOSELECT = {
+    # "suta-kl": (f"{SRC_DIR}/suta_kl.py", "SUTAKLStrategy"),
 }
 
 EC = {
@@ -72,7 +74,8 @@ EMATCH = {
 STRATEGY_MAPPING = {
     **BASIC,
     **DSUTA,
-    **KL,
+    **SUTALM,
+    **AUTOSELECT,
     **EC,
     **MIX,
     **OTHER,
